@@ -15,16 +15,16 @@ const DEMO_USERS = [
 
 const seedNotifications: Record<string, Array<{ title: string; message: string; category: string; priority: string }>> = {
   bodeguero: [
-    { title: "Stock crítico", message: "Helado Vainilla 1L bajó a 6 unidades, bajo el mínimo de 10.", category: "stock", priority: "alta" },
-    { title: "Lote por vencer", message: "El lote L-204 de Chocolate Ciabatta vence en 4 días.", category: "stock", priority: "media" },
+    { title: "Stock crítico", message: "Paleta Cremosa Chocolate bajó a 18 unidades (reorden: 20).", category: "stock", priority: "alta" },
+    { title: "Lote por vencer", message: "Sandwich Helado Nata vence el 2026-11-28.", category: "stock", priority: "media" },
   ],
   vendedor: [
-    { title: "Pedido aprobado", message: "Tu pedido O-0001 fue aprobado por Gerencia.", category: "pedido", priority: "normal" },
-    { title: "Recompra sugerida", message: "Fresa 500ml muestra alta rotación, considera recompra.", category: "recompra", priority: "media" },
+    { title: "Pedido pendiente", message: "El pedido o001 de Minimarket La Esquina espera confirmación.", category: "pedido", priority: "normal" },
+    { title: "Recompra sugerida", message: "Cafetería Dulce Frío está próxima a agotar stock.", category: "recompra", priority: "media" },
   ],
   gerente: [
-    { title: "Pedido pendiente", message: "Hay 1 pedido esperando aprobación.", category: "pedido", priority: "alta" },
-    { title: "Rotación semanal", message: "El sabor más vendido esta semana fue Mango 500ml.", category: "sistema", priority: "normal" },
+    { title: "Solicitud de reabastecimiento", message: "La solicitud r001 ($625.00) requiere aprobación.", category: "pedido", priority: "alta" },
+    { title: "Rotación semanal", message: "Paleta Cremosa Chocolate lidera ventas con 320 unidades.", category: "sistema", priority: "normal" },
   ],
   cliente: [
     { title: "Bienvenido", message: "Tu cuenta fue creada. Explora el catálogo 3D / RA.", category: "sistema", priority: "normal" },
@@ -46,24 +46,25 @@ Deno.serve(async (req) => {
     const results: Array<{ email: string; status: string; role: string }> = [];
 
     for (const demo of DEMO_USERS) {
-      // Check if user already exists in auth.users
+      // List all users to find existing ones by email
       const { data: userList } = await admin.auth.admin.listUsers();
       const existingUser = userList?.users?.find((u: { email: string }) => u.email === demo.email);
 
       if (existingUser) {
-        // Reset password to ensure it works with GoTrue
+        // Force password reset through Admin API (GoTrue-native hashing)
         const { error: updateError } = await admin.auth.admin.updateUserById(
           existingUser.id,
           { password: demo.password, email_confirm: true },
         );
         results.push({
           email: demo.email,
-          status: updateError ? `password_reset_failed: ${updateError.message}` : "password_reset",
+          status: updateError ? `password_reset_failed: ${updateError.message}` : "password_reset_ok",
           role: demo.role,
         });
         continue;
       }
 
+      // Create user through Admin API so GoTrue hashes the password correctly
       const { data: authData, error: authError } = await admin.auth.admin.createUser({
         email: demo.email,
         password: demo.password,
@@ -76,7 +77,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { error: profileError } = await admin.from("profiles").insert({
+      // Upsert profile
+      const { error: profileError } = await admin.from("profiles").upsert({
         id: authData.user.id,
         full_name: demo.full_name,
         email: demo.email,
@@ -89,6 +91,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Seed notifications
       const notes = seedNotifications[demo.role] ?? [];
       if (notes.length) {
         const rows = notes.map((n) => ({
@@ -98,7 +101,7 @@ Deno.serve(async (req) => {
           category: n.category,
           priority: n.priority,
         }));
-        await admin.from("notifications").insert(rows);
+        await admin.from("notifications").upsert(rows, { onConflict: "user_id,title" });
       }
 
       results.push({ email: demo.email, status: "created", role: demo.role });
