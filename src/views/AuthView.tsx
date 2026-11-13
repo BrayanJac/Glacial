@@ -1,26 +1,20 @@
 import { useState } from 'react';
-import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, Snowflake, UserRound, Zap } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Snowflake, UserRound, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { supabase } from '../lib/supabase';
 import { ROLE_LABELS } from '../types';
 import type { Role } from '../types';
 
-interface AuthResult {
-  error?: string;
-  message?: string;
-}
-
-const QUICK_ACCESS: { role: Role; email: string; label: string; color: string }[] = [
-  { role: 'gerente', email: 'gerente@helados.test', label: ROLE_LABELS.gerente, color: 'from-ice-500 to-ice-700' },
-  { role: 'bodeguero', email: 'bodeguero@helados.test', label: ROLE_LABELS.bodeguero, color: 'from-emerald-500 to-emerald-700' },
-  { role: 'vendedor', email: 'vendedor@helados.test', label: ROLE_LABELS.vendedor, color: 'from-amber-500 to-amber-600' },
-  { role: 'cliente', email: 'cliente@helados.test', label: ROLE_LABELS.cliente, color: 'from-frost-500 to-frost-700' },
+const QUICK_ACCESS: { role: Role; name: string; email: string; label: string; color: string }[] = [
+  { role: 'gerente', name: 'Marta Rivas', email: 'gerente@helados.test', label: ROLE_LABELS.gerente, color: 'from-ice-500 to-ice-700' },
+  { role: 'bodeguero', name: 'Carlos Bodega', email: 'bodeguero@helados.test', label: ROLE_LABELS.bodeguero, color: 'from-emerald-500 to-emerald-700' },
+  { role: 'vendedor', name: 'Ana Torres', email: 'vendedor@helados.test', label: ROLE_LABELS.vendedor, color: 'from-amber-500 to-amber-600' },
+  { role: 'cliente', name: 'Pedro León', email: 'cliente@helados.test', label: ROLE_LABELS.cliente, color: 'from-frost-500 to-frost-700' },
 ];
 const DEMO_PASSWORD = 'helados123';
-const DEMO_EMAILS = new Set(QUICK_ACCESS.map((q) => q.email));
+const DEMO_MAP = new Map(QUICK_ACCESS.map((q) => [q.email, q]));
 
 export default function AuthView() {
-  const { signIn, signUp } = useApp();
+  const { signIn, signUp, ensureDemoUser } = useApp();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,12 +24,6 @@ export default function AuthView() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function ensureDemoUsersAndRetry(email: string, password: string): Promise<AuthResult> {
-    const { error: fnError } = await supabase.functions.invoke('setup-demo-users');
-    if (fnError) return { error: 'No se pudieron configurar los usuarios demo. Intenta de nuevo.' };
-    return signIn(email, password);
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -44,9 +32,15 @@ export default function AuthView() {
     let result = mode === 'login'
       ? await signIn(email, password)
       : await signUp(fullName, email, password);
-    if (result.error && mode === 'login' && DEMO_EMAILS.has(email)) {
-      setMessage('Configurando usuarios demo, por favor espera...');
-      result = await ensureDemoUsersAndRetry(email, password);
+    if (result.error && mode === 'login' && DEMO_MAP.has(email)) {
+      const demo = DEMO_MAP.get(email)!;
+      setMessage('Configurando usuario demo, por favor espera...');
+      const setupResult = await ensureDemoUser(demo.email, DEMO_PASSWORD, demo.name, demo.role);
+      if (setupResult.error) {
+        result = setupResult;
+      } else {
+        result = await signIn(email, password);
+      }
       setMessage('');
     }
     setLoading(false);
@@ -55,13 +49,20 @@ export default function AuthView() {
   }
 
   async function quickAccess(roleEmail: string) {
+    const demo = DEMO_MAP.get(roleEmail);
+    if (!demo) return;
     setError('');
     setMessage('');
     setLoading(true);
     let result = await signIn(roleEmail, DEMO_PASSWORD);
     if (result.error) {
-      setMessage('Configurando usuarios demo, por favor espera...');
-      result = await ensureDemoUsersAndRetry(roleEmail, DEMO_PASSWORD);
+      setMessage('Configurando usuario demo, por favor espera...');
+      const setupResult = await ensureDemoUser(demo.email, DEMO_PASSWORD, demo.name, demo.role);
+      if (!setupResult.error) {
+        result = await signIn(roleEmail, DEMO_PASSWORD);
+      } else {
+        result = setupResult;
+      }
       setMessage('');
     }
     setLoading(false);
@@ -103,11 +104,32 @@ export default function AuthView() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && <label className="block"><span className="mb-1.5 block text-sm font-medium text-frost-700">Nombre completo</span><div className="relative"><UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" /><input className="input-field pl-10" value={fullName} onChange={(event) => setFullName(event.target.value)} required placeholder="Ej. Ana Torres" /></div></label>}
-            <label className="block"><span className="mb-1.5 block text-sm font-medium text-frost-700">Correo electrónico</span><div className="relative"><Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" /><input type="email" className="input-field pl-10" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="nombre@empresa.com" /></div></label>
-            <label className="block"><span className="mb-1.5 block text-sm font-medium text-frost-700">Contraseña</span><div className="relative"><LockKeyhole className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" /><input type={showPassword ? 'text' : 'password'} className="input-field px-10" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required placeholder="Mínimo 6 caracteres" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-frost-400 hover:text-frost-700" aria-label="Mostrar contraseña">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></label>
+            {mode === 'signup' && (
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-frost-700">Nombre completo</span>
+                <div className="relative">
+                  <UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                  <input className="input-field pl-10" value={fullName} onChange={(event) => setFullName(event.target.value)} required placeholder="Ej. Ana Torres" />
+                </div>
+              </label>
+            )}
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-frost-700">Correo electrónico</span>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                <input type="email" className="input-field pl-10" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="nombre@empresa.com" />
+              </div>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-frost-700">Contraseña</span>
+              <div className="relative">
+                <LockKeyhole className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                <input type={showPassword ? 'text' : 'password'} className="input-field px-10" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required placeholder="Mínimo 6 caracteres" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-frost-400 hover:text-frost-700" aria-label="Mostrar contraseña">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+              </div>
+            </label>
             {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-            {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+            {message && <div className="flex items-center gap-2 rounded-xl border border-ice-200 bg-ice-50 px-4 py-3 text-sm text-ice-700"><span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-ice-400 border-t-transparent" />{message}</div>}
             <button disabled={loading} className="btn-primary w-full justify-center py-3">{loading ? 'Procesando...' : mode === 'login' ? 'Ingresar al sistema' : 'Crear cuenta'}<ArrowRight className="h-4 w-4" /></button>
           </form>
 

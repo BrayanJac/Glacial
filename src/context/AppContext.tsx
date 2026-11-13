@@ -49,6 +49,7 @@ interface AppContextValue {
   authReady: boolean;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (fullName: string, email: string, password: string) => Promise<AuthResult>;
+  ensureDemoUser: (email: string, password: string, fullName: string, role: Role) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   // data
   products: Product[];
@@ -231,6 +232,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { message: 'Cuenta creada. Ahora puedes iniciar sesion.' };
     }
     return { message: 'Cuenta creada. Ahora puedes iniciar sesion.' };
+  }, []);
+
+  const ensureDemoUser = useCallback(async (demoEmail: string, demoPassword: string, fullName: string, demoRole: Role): Promise<AuthResult> => {
+    // Try to sign up the demo user (creates them in GoTrue properly)
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: demoEmail,
+      password: demoPassword,
+      options: { data: { full_name: fullName } },
+    });
+
+    if (signUpError) {
+      // If user already exists, just try to sign in
+      if (signUpError.message.includes('already') || signUpError.message.includes('registered') || signUpError.message.includes('exists')) {
+        return {};
+      }
+      return { error: errorMessage(signUpError, 'No se pudo configurar el usuario demo.') };
+    }
+
+    if (signUpData.user) {
+      // Upsert profile with the correct role
+      await supabase.from('profiles').upsert({
+        id: signUpData.user.id,
+        full_name: fullName,
+        email: demoEmail,
+        role: demoRole,
+        is_active: true,
+      });
+    }
+
+    // Sign out from the signUp session so we can sign in cleanly
+    await supabase.auth.signOut();
+    return {};
   }, []);
 
   const signOut = useCallback(async () => {
@@ -463,7 +496,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         session, user, profile, role, authReady,
-        signIn, signUp, signOut,
+        signIn, signUp, ensureDemoUser, signOut,
         products, movements, orders, clients, replenishments, auditLogs, config,
         addMovement, addOrder, updateOrderStatus, confirmOrder, dispatchOrder,
         draftCart, addToDraftCart, removeFromDraftCart, clearDraftCart,
