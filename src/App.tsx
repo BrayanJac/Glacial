@@ -5,13 +5,14 @@ import {
 import { AppProvider, useApp } from './context/AppContext';
 import UserMenu, { AppLogo } from './components/RoleSelector';
 import AuthView from './views/AuthView';
-import DashboardView from './views/DashboardView';
-import CatalogView from './views/CatalogView';
-import AnalyticsView from './views/AnalyticsView';
+import BodegueroView from './views/BodegueroView';
+import VendedorView from './views/VendedorView';
+import GerenteView from './views/GerenteView';
+import ClienteView from './views/ClienteView';
 import NotificationsView from './views/NotificationsView';
 import type { Role } from './types';
 
-type ViewKey = 'dashboard' | 'catalog' | 'analytics' | 'notifications';
+type ViewKey = 'dashboard' | 'notifications';
 
 interface NavItem {
   key: ViewKey;
@@ -21,9 +22,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard de Inventarios', icon: LayoutDashboard, roles: ['bodeguero', 'gerente'] },
-  { key: 'catalog', label: 'Catalogo 3D / RA', icon: Box, roles: ['cliente', 'vendedor'] },
-  { key: 'analytics', label: 'Analytics y Rotacion', icon: BarChart3, roles: ['gerente'] },
+  { key: 'dashboard', label: 'Operacion', icon: LayoutDashboard, roles: ['bodeguero', 'vendedor', 'gerente', 'cliente'] },
   { key: 'notifications', label: 'Notificaciones', icon: Bell, roles: ['bodeguero', 'vendedor', 'gerente', 'cliente'] },
 ];
 
@@ -50,6 +49,17 @@ function AppContent() {
   function handleNavigate(key: ViewKey) {
     setActiveView(key);
     setMobileNavOpen(false);
+  }
+
+  function renderMainView() {
+    if (currentView === 'notifications') return <NotificationsView />;
+    switch (role) {
+      case 'bodeguero': return <BodegueroView />;
+      case 'vendedor': return <VendedorView />;
+      case 'gerente': return <GerenteView />;
+      case 'cliente': return <ClienteView />;
+      default: return <ClienteView />;
+    }
   }
 
   return (
@@ -119,15 +129,12 @@ function AppContent() {
       )}
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 animate-fade-in">
-        {currentView === 'dashboard' && <DashboardView />}
-        {currentView === 'catalog' && <CatalogView />}
-        {currentView === 'analytics' && <AnalyticsView />}
-        {currentView === 'notifications' && <NotificationsView />}
+        {renderMainView()}
       </main>
 
       <footer className="border-t border-frost-200 bg-white/50">
         <div className="mx-auto max-w-7xl px-6 py-4 text-center text-xs text-frost-400">
-          Helados System - Sistema de Control de Inventarios y Catalogo 3D/RA | Prototipo funcional
+          Helados System - Sistema de Control de Inventarios y Catalogo 3D/RA | Distribuidora Don Willy
         </div>
       </footer>
     </div>
