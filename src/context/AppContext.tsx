@@ -213,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: 'Correo o contrasena incorrectos.' };
+    if (error) return { error: errorMessage(error, 'Correo o contrasena incorrectos.') };
     return {};
   }, []);
 
@@ -243,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (signUpError) {
-      // If user already exists, just try to sign in
+      // If user already exists, just return OK so caller can retry signIn
       if (signUpError.message.includes('already') || signUpError.message.includes('registered') || signUpError.message.includes('exists')) {
         return {};
       }
@@ -259,10 +259,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         role: demoRole,
         is_active: true,
       });
+
+      // Confirm email via SECURITY DEFINER function (demo emails only)
+      await supabase.rpc('confirm_demo_email', { p_email: demoEmail });
+
+      // If signUp returned a session, sign out so caller's signIn creates a fresh one
+      if (signUpData.session) {
+        await supabase.auth.signOut();
+      }
     }
 
-    // Sign out from the signUp session so we can sign in cleanly
-    await supabase.auth.signOut();
     return {};
   }, []);
 
