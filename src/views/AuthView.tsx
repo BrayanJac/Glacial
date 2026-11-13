@@ -11,7 +11,7 @@ const QUICK_ACCESS: { role: Role; name: string; email: string; label: string; co
   { role: 'vendedor', name: 'Ana Torres', email: 'vendedor@helados.test', label: ROLE_LABELS.vendedor, color: 'from-amber-500 to-amber-600' },
   { role: 'cliente', name: 'Pedro León', email: 'cliente@helados.test', label: ROLE_LABELS.cliente, color: 'from-frost-500 to-frost-700' },
 ];
-const DEMO_PASSWORD = 'helados123';
+const DEMO_PASSWORD = 'Helados2026!';
 const DEMO_MAP = new Map(QUICK_ACCESS.map((q) => [q.email, q]));
 
 interface AuthResult {
