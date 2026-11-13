@@ -46,14 +46,21 @@ Deno.serve(async (req) => {
     const results: Array<{ email: string; status: string; role: string }> = [];
 
     for (const demo of DEMO_USERS) {
-      const { data: existing } = await admin
-        .from("profiles")
-        .select("id")
-        .eq("email", demo.email)
-        .maybeSingle();
+      // Check if user already exists in auth.users
+      const { data: userList } = await admin.auth.admin.listUsers();
+      const existingUser = userList?.users?.find((u: { email: string }) => u.email === demo.email);
 
-      if (existing) {
-        results.push({ email: demo.email, status: "exists", role: demo.role });
+      if (existingUser) {
+        // Reset password to ensure it works with GoTrue
+        const { error: updateError } = await admin.auth.admin.updateUserById(
+          existingUser.id,
+          { password: demo.password, email_confirm: true },
+        );
+        results.push({
+          email: demo.email,
+          status: updateError ? `password_reset_failed: ${updateError.message}` : "password_reset",
+          role: demo.role,
+        });
         continue;
       }
 
