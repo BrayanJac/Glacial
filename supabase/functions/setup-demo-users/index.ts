@@ -18,27 +18,22 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  const debug: string[] = [];
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    debug.push(`url=${supabaseUrl ? "yes" : "no"} key=${serviceRoleKey ? "yes" : "no"}`);
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return new Response(JSON.stringify({ error: "Missing env vars", debug }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // Write debug info to the _edge_debug table
+    await admin.from("_edge_debug").upsert({ key: "supabase_url", value: supabaseUrl });
+    await admin.from("_edge_debug").upsert({ key: "has_service_key", value: serviceRoleKey ? "yes" : "no" });
+
     const results: Array<Record<string, unknown>> = [];
+    const debugLog: string[] = [`url=${supabaseUrl}`, `key=${serviceRoleKey ? "yes" : "no"}`];
 
     for (const demo of DEMO_USERS) {
-      // Try createUser directly — if user exists, updateUserById to reset password
       const { data: createData, error: createError } = await admin.auth.admin.createUser({
         email: demo.email,
         password: demo.password,
@@ -47,36 +42,23 @@ Deno.serve(async (req) => {
       });
 
       if (createError) {
-        // User likely exists — find and reset password
-        const errMsg = createError.message;
-        debug.push(`${demo.email}: createError="${errMsg}"`);
-
-        // List users to find existing one
+        debugLog.push(`${demo.email}: createErr=${createError.message}`);
+        // User might already exist - try to find and update
         const { data: listData, error: listError } = await admin.auth.admin.listUsers();
         if (listError) {
-          debug.push(`${demo.email}: listError="${listError.message}"`);
-          results.push({ email: demo.email, status: "list_failed", error: errMsg });
+          debugLog.push(`${demo.email}: listErr=${listError.message}`);
+          results.push({ email: demo.email, status: "list_failed", error: createError.message });
           continue;
         }
-
         const existing = listData?.users?.find((u: { email: string }) => u.email === demo.email);
-        if (!existing) {
-          debug.push(`${demo.email}: not found in list`);
-          results.push({ email: demo.email, status: "not_found", error: errMsg });
-          continue;
-        }
-
-        const { error: updateError } = await admin.auth.admin.updateUserById(existing.id, {
-          password: demo.password,
-          email_confirm: true,
-        });
-
-        if (updateError) {
-          debug.push(`${demo.email}: updateError="${updateError.message}"`);
-          results.push({ email: demo.email, status: "update_failed", error: updateError.message });
+        if (existing) {
+          const { error: updateErr } = await admin.auth.admin.updateUserById(existing.id, {
+            password: demo.password, email_confirm: true,
+          });
+          debugLog.push(`${demo.email}: reset=${updateErr ? updateErr.message : "ok"}`);
+          results.push({ email: demo.email, status: updateErr ? "reset_failed" : "password_reset_ok" });
         } else {
-          debug.push(`${demo.email}: password_reset_ok`);
-          results.push({ email: demo.email, status: "password_reset_ok" });
+          results.push({ email: demo.email, status: "not_found_after_create_error" });
         }
         continue;
       }
@@ -87,26 +69,23 @@ Deno.serve(async (req) => {
       }
 
       // Upsert profile
-      const { error: profileError } = await admin.from("profiles").upsert({
-        id: createData.user.id,
-        full_name: demo.full_name,
-        email: demo.email,
-        role: demo.role,
-        is_active: true,
+      const { error: profileErr } = await admin.from("profiles").upsert({
+        id: createData.user.id, full_name: demo.full_name, email: demo.email, role: demo.role, is_active: true,
       });
-      debug.push(`${demo.email}: profile=${profileError ? profileError.message : "ok"}`);
+      debugLog.push(`${demo.email}: profile=${profileErr ? profileErr.message : "ok"}`);
 
-      results.push({ email: demo.email, status: "created", userId: createData.user.id });
+      results.push({ email: demo.email, status: "created", uid: createData.user.id });
     }
 
-    return new Response(JSON.stringify({ ok: true, results, debug }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Write full debug log
+    await admin.from("_edge_debug").upsert({ key: "last_run_log", value: debugLog.join("\n") });
+
+    return new Response(JSON.stringify({ ok: true, results, debug: debugLog }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err), debug, stack: err?.stack }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: String(err), stack: err?.stack }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

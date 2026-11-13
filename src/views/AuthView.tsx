@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Snowflake, UserRound, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
 import { ROLE_LABELS } from '../types';
 import type { Role } from '../types';
 
@@ -13,6 +14,11 @@ const QUICK_ACCESS: { role: Role; name: string; email: string; label: string; co
 const DEMO_PASSWORD = 'helados123';
 const DEMO_MAP = new Map(QUICK_ACCESS.map((q) => [q.email, q]));
 
+interface AuthResult {
+  error?: string;
+  message?: string;
+}
+
 export default function AuthView() {
   const { signIn, signUp, ensureDemoUser } = useApp();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -24,6 +30,27 @@ export default function AuthView() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  async function setupAndRetry(email: string, password: string): Promise<AuthResult> {
+    setMessage('Configurando usuarios demo, por favor espera...');
+    // Call the edge function to create all demo users via Admin API
+    const { data: fnData, error: fnError } = await supabase.functions.invoke('setup-demo-users');
+    setMessage('');
+
+    if (fnError) {
+      return { error: `Error de configuracion: ${fnError.message}` };
+    }
+
+    if (fnData?.error) {
+      return { error: `Error interno: ${fnData.error}` };
+    }
+
+    // Wait a moment for the auth system to sync
+    await new Promise((r) => setTimeout(r, 500));
+
+    // Now try to sign in
+    return signIn(email, password);
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -33,15 +60,7 @@ export default function AuthView() {
       ? await signIn(email, password)
       : await signUp(fullName, email, password);
     if (result.error && mode === 'login' && DEMO_MAP.has(email)) {
-      const demo = DEMO_MAP.get(email)!;
-      setMessage('Configurando usuario demo, por favor espera...');
-      const setupResult = await ensureDemoUser(demo.email, DEMO_PASSWORD, demo.name, demo.role);
-      if (setupResult.error) {
-        result = setupResult;
-      } else {
-        result = await signIn(email, password);
-      }
-      setMessage('');
+      result = await setupAndRetry(email, password);
     }
     setLoading(false);
     if (result.error) setError(result.error);
@@ -56,14 +75,7 @@ export default function AuthView() {
     setLoading(true);
     let result = await signIn(roleEmail, DEMO_PASSWORD);
     if (result.error) {
-      setMessage('Configurando usuario demo, por favor espera...');
-      const setupResult = await ensureDemoUser(demo.email, DEMO_PASSWORD, demo.name, demo.role);
-      if (!setupResult.error) {
-        result = await signIn(roleEmail, DEMO_PASSWORD);
-      } else {
-        result = setupResult;
-      }
-      setMessage('');
+      result = await setupAndRetry(roleEmail, DEMO_PASSWORD);
     }
     setLoading(false);
     if (result.error) setError(result.error);
