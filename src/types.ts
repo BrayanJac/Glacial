@@ -1,5 +1,19 @@
 export type Role = 'bodeguero' | 'vendedor' | 'gerente' | 'cliente';
 
+export type NotificationCategory = 'stock' | 'pedido' | 'recompra' | 'sistema';
+export type NotificationPriority = 'alta' | 'media' | 'normal';
+
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  priority: NotificationPriority;
+  is_read: boolean;
+  created_at: string;
+}
+
 export type MovementType = 'entrada' | 'salida';
 
 export interface Product {
