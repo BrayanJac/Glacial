@@ -1,6 +1,16 @@
 import { useState } from 'react';
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Snowflake, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Snowflake, UserRound, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { ROLE_LABELS } from '../types';
+import type { Role } from '../types';
+
+const QUICK_ACCESS: { role: Role; email: string; label: string; color: string }[] = [
+  { role: 'gerente', email: 'gerente@helados.test', label: ROLE_LABELS.gerente, color: 'from-ice-500 to-ice-700' },
+  { role: 'bodeguero', email: 'bodeguero@helados.test', label: ROLE_LABELS.bodeguero, color: 'from-emerald-500 to-emerald-700' },
+  { role: 'vendedor', email: 'vendedor@helados.test', label: ROLE_LABELS.vendedor, color: 'from-amber-500 to-amber-600' },
+  { role: 'cliente', email: 'cliente@helados.test', label: ROLE_LABELS.cliente, color: 'from-frost-500 to-frost-700' },
+];
+const DEMO_PASSWORD = 'helados123';
 
 export default function AuthView() {
   const { signIn, signUp } = useApp();
@@ -24,6 +34,15 @@ export default function AuthView() {
     setLoading(false);
     if (result.error) setError(result.error);
     if (result.message) setMessage(result.message);
+  }
+
+  async function quickAccess(roleEmail: string) {
+    setError('');
+    setMessage('');
+    setLoading(true);
+    const result = await signIn(roleEmail, DEMO_PASSWORD);
+    setLoading(false);
+    if (result.error) setError(result.error);
   }
 
   return (
@@ -68,6 +87,32 @@ export default function AuthView() {
             {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
             <button disabled={loading} className="btn-primary w-full justify-center py-3">{loading ? 'Procesando...' : mode === 'login' ? 'Ingresar al sistema' : 'Crear cuenta'}<ArrowRight className="h-4 w-4" /></button>
           </form>
+
+          {mode === 'login' && (
+            <div className="mt-6">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="h-px flex-1 bg-frost-200" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-frost-400">Acceso rápido demo</span>
+                <div className="h-px flex-1 bg-frost-200" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_ACCESS.map((qa) => (
+                  <button
+                    key={qa.role}
+                    onClick={() => quickAccess(qa.email)}
+                    disabled={loading}
+                    className="group flex items-center gap-2 rounded-xl border border-frost-200 bg-white p-3 text-left transition-all hover:border-ice-300 hover:shadow-md disabled:opacity-50"
+                  >
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${qa.color} text-white`}>
+                      <Zap className="h-4 w-4" />
+                    </span>
+                    <span className="text-xs font-semibold text-frost-700">{qa.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }} className="mt-6 w-full text-center text-sm font-medium text-ice-700 hover:text-ice-900">{mode === 'login' ? '¿Aún no tienes una cuenta? Regístrate' : 'Ya tengo una cuenta. Iniciar sesión'}</button>
         </section>
       </div>

@@ -425,7 +425,7 @@ export default function BodegueroView() {
                   <label className="mb-1.5 block text-sm font-medium text-frost-600">Producto</label>
                   <select className="input-field" value={formData.productId} onChange={(e) => setFormData({ ...formData, productId: e.target.value })} required>
                     <option value="">Seleccionar producto...</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>))}
+                    {products.map((p) => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
                   </select>
                 </div>
                 <div>

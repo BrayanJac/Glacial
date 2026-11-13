@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Bell, Check, CheckCheck, Filter, Package, ShoppingCart, Sparkles, X } from 'lucide-react';
+import { Bell, Check, CheckCheck, Filter, Package, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { NotificationCategory, NotificationItem } from '../types';
 
-const categoryLabels: Record<NotificationCategory | 'todos', string> = { todos: 'Todas', stock: 'Stock', pedido: 'Pedidos', recompra: 'Recompra', sistema: 'Sistema' };
+const categoryLabels: Record<NotificationCategory | 'todos', string> = { todos: 'Todas', stock: 'Stock', pedido: 'Pedidos', recompra: 'Recompra', sistema: 'Sistema', despacho: 'Despacho' };
 
 function iconFor(category: NotificationCategory) {
   if (category === 'stock') return Package;
   if (category === 'pedido') return ShoppingCart;
   if (category === 'recompra') return Sparkles;
+  if (category === 'despacho') return Truck;
   return Bell;
 }
 

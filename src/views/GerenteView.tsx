@@ -231,7 +231,7 @@ export default function GerenteView() {
                       }`}>
                         {r.status === 'pendiente_aprobacion' ? 'Pendiente' : r.status === 'enviada' ? 'Enviada' : r.status === 'en_transito' ? 'En transito' : 'Recibida'}
                       </span>
-                      {r.requiresApproval && <span className="badge bg-red-100 text-red-700">Requiere aprobacion (>${config.approvalThreshold})</span>}
+                      {r.requiresApproval && <span className="badge bg-red-100 text-red-700">Requiere aprobacion (${`>${config.approvalThreshold}`})</span>}
                     </div>
                     <p className="text-xs text-frost-400 mb-2">{r.supplier} | {r.createdAt} | {r.createdBy}</p>
                     <div className="space-y-1">
