@@ -1,4 +1,4 @@
-import type { Product, KardexMovement, OrderDraft, Client, ReplenishmentRequest, AuditLogEntry, GlobalConfig } from '../types';
+import type { Product, KardexMovement, OrderDraft, Client, ReplenishmentRequest, AuditLogEntry, GlobalConfig, Supplier } from '../types';
 
 export const seedProducts: Product[] = [
   {
@@ -327,3 +327,30 @@ export const seedConfig: GlobalConfig = {
   preventiveEffectivenessTarget: 80,
   stockBreakTarget: 0,
 };
+
+export const seedSuppliers: Supplier[] = [
+  {
+    id: 'sup001',
+    name: 'Helados Industrial S.A.',
+    ruc: '0992345678001',
+    address: 'Av. Industrial 234, Guayaquil',
+    email: 'ventas@heladosindustrial.com',
+    phone: '04-2288-4567',
+  },
+  {
+    id: 'sup002',
+    name: 'Frimax Distribuidora',
+    ruc: '1791234567001',
+    address: 'Calle Los Almendros 56, Quito',
+    email: 'pedidos@frimax.com.ec',
+    phone: '02-2456-7890',
+  },
+  {
+    id: 'sup003',
+    name: 'Lacteos del Norte',
+    ruc: '1109876543001',
+    address: 'Panamericana Norte Km 12, Ibarra',
+    email: 'comercial@lacteosnorte.ec',
+    phone: '06-2955-1234',
+  },
+];

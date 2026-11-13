@@ -111,6 +111,15 @@ export interface AuditLogEntry {
   newValue: string;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  ruc: string;
+  address: string;
+  email: string;
+  phone: string;
+}
+
 export interface GlobalConfig {
   approvalThreshold: number;
   draftExpiryDays: number;

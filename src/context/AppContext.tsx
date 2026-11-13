@@ -21,10 +21,11 @@ import type {
   MovementType,
   ReplenishmentStatus,
   OrderStatus,
+  Supplier,
 } from '../types';
 import {
   seedProducts, seedMovements, seedOrders, seedClients,
-  seedReplenishments, seedAuditLogs, seedConfig,
+  seedReplenishments, seedAuditLogs, seedConfig, seedSuppliers,
 } from '../data/seedData';
 import { supabase } from '../lib/supabase';
 
@@ -85,6 +86,11 @@ interface AppContextValue {
   toggleProductActive: (id: string) => void;
   // audit
   addAuditLog: (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => void;
+  // suppliers
+  suppliers: Supplier[];
+  addSupplier: (s: Omit<Supplier, 'id'>) => void;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => void;
   // config
   updateConfig: (updates: Partial<GlobalConfig>) => void;
   // derived
@@ -119,6 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [replenishments, setReplenishments] = useState<ReplenishmentRequest[]>(seedReplenishments);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(seedAuditLogs);
   const [config, setConfig] = useState<GlobalConfig>(seedConfig);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(seedSuppliers);
   const [draftCart, setDraftCart] = useState<OrderDraftItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -454,6 +461,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [products, profile, addAuditLog]);
 
+  const addSupplier = useCallback((s: Omit<Supplier, 'id'>) => {
+    setSuppliers((prev) => [...prev, { ...s, id: `sup${Date.now()}` }]);
+  }, []);
+
+  const updateSupplier = useCallback((id: string, updates: Partial<Supplier>) => {
+    setSuppliers((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  }, []);
+
+  const deleteSupplier = useCallback((id: string) => {
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
   const updateConfig = useCallback((updates: Partial<GlobalConfig>) => {
     setConfig((prev) => ({ ...prev, ...updates }));
     if (updates.approvalThreshold !== undefined) {
@@ -510,6 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notifications, unreadNotifications,
         markNotificationRead, markAllNotificationsRead, pushNotification,
         createReplenishment, updateReplenishmentStatus,
+        suppliers, addSupplier, updateSupplier, deleteSupplier,
         updateProduct, toggleProductActive,
         addAuditLog, updateConfig,
         criticalProducts, pendingReplenishments,

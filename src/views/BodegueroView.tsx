@@ -2,9 +2,10 @@ import { useState } from 'react';
 import {
   Package, AlertTriangle, Plus, Minus, ArrowUpCircle, ArrowDownCircle,
   Settings2, X, Check, FileText, Truck, Mail, Clock, Search, SlidersHorizontal,
+  Building2, Phone, MapPin, Hash, Edit2, Trash2, Store,
 } from 'lucide-react';
 import { useApp, getStockStatus } from '../context/AppContext';
-import type { MovementType, Product, ReplenishmentStatus } from '../types';
+import type { MovementType, Product, ReplenishmentStatus, Supplier } from '../types';
 
 function KpiCard({ icon: Icon, label, value, sublabel, color }: {
   icon: typeof Package; label: string; value: string | number; sublabel?: string; color: string;
@@ -30,19 +31,28 @@ export default function BodegueroView() {
     products, movements, addMovement, orders, dispatchOrder,
     criticalProducts, replenishments, createReplenishment, updateReplenishmentStatus,
     updateProduct, toggleProductActive, config, addAuditLog, profile,
+    suppliers, addSupplier, updateSupplier, deleteSupplier,
   } = useApp();
 
   const [showForm, setShowForm] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState<Product | null>(null);
   const [showReplenish, setShowReplenish] = useState(false);
+  const [showSuppliers, setShowSuppliers] = useState(false);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [reorderQty, setReorderQty] = useState(0);
   const [replenishItems, setReplenishItems] = useState<Record<string, number>>({});
-  const [replenishSupplier, setReplenishSupplier] = useState('Helados Industrial S.A.');
+  const [replenishSupplierId, setReplenishSupplierId] = useState('');
   const [replenishNote, setReplenishNote] = useState('');
   const [replenishResult, setReplenishResult] = useState('');
   const [formError, setFormError] = useState('');
+  const [supplierFormError, setSupplierFormError] = useState('');
+  const [supplierFormData, setSupplierFormData] = useState({
+    name: '', ruc: '', address: '', email: '', phone: '',
+  });
   const [formData, setFormData] = useState({
     productId: '', type: 'entrada' as MovementType, quantity: 1,
     responsible: '', note: '', justification: '', comprobante: '',
@@ -56,6 +66,44 @@ export default function BodegueroView() {
   });
 
   const confirmedOrders = orders.filter((o) => o.status === 'confirmado');
+  const filteredSuppliers = suppliers.filter((s) =>
+    s.name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+    s.ruc.includes(supplierSearch) ||
+    s.email.toLowerCase().includes(supplierSearch.toLowerCase())
+  );
+  const selectedSupplier = suppliers.find((s) => s.id === replenishSupplierId);
+
+  function openSupplierForm(supplier?: Supplier) {
+    if (supplier) {
+      setEditingSupplier(supplier);
+      setSupplierFormData({ name: supplier.name, ruc: supplier.ruc, address: supplier.address, email: supplier.email, phone: supplier.phone });
+    } else {
+      setEditingSupplier(null);
+      setSupplierFormData({ name: '', ruc: '', address: '', email: '', phone: '' });
+    }
+    setSupplierFormError('');
+    setShowSupplierForm(true);
+  }
+
+  function handleSupplierSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSupplierFormError('');
+    if (!supplierFormData.name.trim() || !supplierFormData.ruc.trim()) {
+      setSupplierFormError('Nombre y RUC son obligatorios.');
+      return;
+    }
+    if (editingSupplier) {
+      updateSupplier(editingSupplier.id, supplierFormData);
+    } else {
+      addSupplier(supplierFormData);
+    }
+    setShowSupplierForm(false);
+  }
+
+  function handleDeleteSupplier(id: string) {
+    deleteSupplier(id);
+    if (replenishSupplierId === id) setReplenishSupplierId('');
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,13 +149,16 @@ export default function BodegueroView() {
         return { productId: pid, productName: p.name, quantity: qty, price: p.price };
       });
     if (items.length === 0) return;
-    const result = createReplenishment(items, replenishSupplier, replenishNote);
+    if (!selectedSupplier) { setFormError('Selecciona un proveedor.'); return; }
+    const supplierName = selectedSupplier.name;
+    const result = createReplenishment(items, supplierName, replenishNote);
     if (result.requiresApproval) {
-      setReplenishResult(`Solicitud de $${items.reduce((s, i) => s + i.quantity * i.price, 0).toFixed(2)} creada. Supera el umbral de $${config.approvalThreshold} - requiere aprobacion del Gerente.`);
+      setReplenishResult(`Solicitud de ${items.reduce((s, i) => s + i.quantity * i.price, 0).toFixed(2)} creada. Supera el umbral de ${config.approvalThreshold} - requiere aprobacion del Gerente.`);
     } else {
-      setReplenishResult(`Solicitud de $${items.reduce((s, i) => s + i.quantity * i.price, 0).toFixed(2)} enviada por correo al proveedor ${replenishSupplier}.`);
+      setReplenishResult(`Solicitud de ${items.reduce((s, i) => s + i.quantity * i.price, 0).toFixed(2)} enviada por correo al proveedor ${supplierName}.`);
     }
     setReplenishItems({});
+    setReplenishSupplierId('');
     setTimeout(() => { setReplenishResult(''); setShowReplenish(false); }, 4000);
   }
 
@@ -306,6 +357,9 @@ export default function BodegueroView() {
             <button onClick={() => setShowReplenish(true)} className="btn-secondary">
               <Truck className="h-4 w-4" /> Reabastecer
             </button>
+            <button onClick={() => setShowSuppliers(true)} className="btn-secondary">
+              <Store className="h-4 w-4" /> Proveedores
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -501,9 +555,29 @@ export default function BodegueroView() {
               </div>
               <div className="p-5 space-y-4">
                 {replenishResult && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{replenishResult}</div>}
+                {formError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-frost-600">Proveedor</label>
-                  <input className="input-field" value={replenishSupplier} onChange={(e) => setReplenishSupplier(e.target.value)} placeholder="Nombre del proveedor..." />
+                  <select
+                    className="input-field"
+                    value={replenishSupplierId}
+                    onChange={(e) => { setReplenishSupplierId(e.target.value); setFormError(''); }}
+                    required
+                  >
+                    <option value="">Seleccionar proveedor...</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} - RUC: {s.ruc}</option>
+                    ))}
+                  </select>
+                  {selectedSupplier && (
+                    <div className="mt-2 rounded-xl border border-frost-200 bg-frost-50 p-3 space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-frost-600"><Building2 className="h-3.5 w-3.5 text-frost-400" /> {selectedSupplier.name}</div>
+                      <div className="flex items-center gap-2 text-xs text-frost-500"><Hash className="h-3.5 w-3.5 text-frost-400" /> RUC: {selectedSupplier.ruc}</div>
+                      <div className="flex items-center gap-2 text-xs text-frost-500"><MapPin className="h-3.5 w-3.5 text-frost-400" /> {selectedSupplier.address}</div>
+                      <div className="flex items-center gap-2 text-xs text-frost-500"><Mail className="h-3.5 w-3.5 text-frost-400" /> {selectedSupplier.email}</div>
+                      <div className="flex items-center gap-2 text-xs text-frost-500"><Phone className="h-3.5 w-3.5 text-frost-400" /> {selectedSupplier.phone}</div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-frost-600">Productos a solicitar</label>
@@ -563,6 +637,114 @@ export default function BodegueroView() {
                 </div>
                 <button onClick={applyReorder} className="btn-primary w-full justify-center"><Check className="h-4 w-4" /> Guardar</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suppliers Management Modal */}
+      {showSuppliers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-frost-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl mx-4 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-frost-200 bg-ice-50 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <Store className="h-5 w-5 text-ice-600" />
+                  <h3 className="font-display text-base font-semibold text-frost-800">Gestion de Proveedores</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => openSupplierForm()} className="btn-primary text-xs"><Plus className="h-3.5 w-3.5" /> Nuevo</button>
+                  <button onClick={() => setShowSuppliers(false)} className="text-frost-400 hover:text-frost-700"><X className="h-5 w-5" /></button>
+                </div>
+              </div>
+              <div className="border-b border-frost-100 p-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                  <input className="input-field pl-9 py-2 text-sm" placeholder="Buscar por nombre, RUC o correo..." value={supplierSearch} onChange={(e) => setSupplierSearch(e.target.value)} />
+                </div>
+              </div>
+              <div className="divide-y divide-frost-50 max-h-[50vh] overflow-y-auto">
+                {filteredSuppliers.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-frost-400">
+                    No hay proveedores registrados.<br />Haz clic en "Nuevo" para agregar el primero.
+                  </div>
+                ) : filteredSuppliers.map((s) => (
+                  <div key={s.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-frost-400 flex-shrink-0" />
+                          <p className="text-sm font-semibold text-frost-700 truncate">{s.name}</p>
+                        </div>
+                        <p className="flex items-center gap-2 text-xs text-frost-500"><Hash className="h-3.5 w-3.5" /> RUC: {s.ruc}</p>
+                        <p className="flex items-center gap-2 text-xs text-frost-500"><MapPin className="h-3.5 w-3.5" /> {s.address}</p>
+                        <p className="flex items-center gap-2 text-xs text-frost-500"><Mail className="h-3.5 w-3.5" /> {s.email}</p>
+                        <p className="flex items-center gap-2 text-xs text-frost-500"><Phone className="h-3.5 w-3.5" /> {s.phone}</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <button onClick={() => openSupplierForm(s)} className="rounded-lg border border-frost-200 p-2 text-frost-500 transition-colors hover:bg-frost-50 hover:text-ice-600" title="Editar"><Edit2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleDeleteSupplier(s.id)} className="rounded-lg border border-frost-200 p-2 text-frost-500 transition-colors hover:bg-red-50 hover:text-red-600" title="Eliminar"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supplier Form Modal */}
+      {showSupplierForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-frost-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md mx-4 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-frost-200 bg-ice-50 px-5 py-4">
+                <h3 className="font-display text-base font-semibold text-frost-800">{editingSupplier ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
+                <button onClick={() => setShowSupplierForm(false)} className="text-frost-400 hover:text-frost-700"><X className="h-5 w-5" /></button>
+              </div>
+              <form onSubmit={handleSupplierSubmit} className="space-y-4 p-5">
+                {supplierFormError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{supplierFormError}</div>}
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-frost-600">Nombre / Razon Social *</span>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                    <input className="input-field pl-10" value={supplierFormData.name} onChange={(e) => setSupplierFormData({ ...supplierFormData, name: e.target.value })} required placeholder="Ej. Helados Industrial S.A." />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-frost-600">RUC *</span>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                    <input className="input-field pl-10" value={supplierFormData.ruc} onChange={(e) => setSupplierFormData({ ...supplierFormData, ruc: e.target.value })} required placeholder="Ej. 0992345678001" />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-frost-600">Direccion</span>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                    <input className="input-field pl-10" value={supplierFormData.address} onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })} placeholder="Ej. Av. Industrial 234, Guayaquil" />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-frost-600">Correo</span>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                    <input type="email" className="input-field pl-10" value={supplierFormData.email} onChange={(e) => setSupplierFormData({ ...supplierFormData, email: e.target.value })} placeholder="proveedor@empresa.com" />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-frost-600">Telefono</span>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-frost-400" />
+                    <input className="input-field pl-10" value={supplierFormData.phone} onChange={(e) => setSupplierFormData({ ...supplierFormData, phone: e.target.value })} placeholder="Ej. 04-2288-4567" />
+                  </div>
+                </label>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setShowSupplierForm(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+                  <button type="submit" className="btn-primary flex-1 justify-center"><Check className="h-4 w-4" /> {editingSupplier ? 'Guardar cambios' : 'Crear proveedor'}</button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
